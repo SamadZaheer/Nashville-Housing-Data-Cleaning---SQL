@@ -1,0 +1,6 @@
+# This is a pure SQL project — no Python dependencies required.
+# Requires: PostgreSQL 12+
+#
+# To import the dataset and run the cleaning script:
+#   psql -U your_username -d your_database -c "\copy nashville_housing FROM 'Nashville Housing Data.csv' CSV HEADER"
+#   psql -U your_username -d your_database -f "Nashville Housing Data.sql"

@@ -1,106 +1,63 @@
-# Nashville Housing Data Cleaning using PostgreSQL
+# Nashville Housing Data Cleaning — SQL
+
+PostgreSQL data cleaning pipeline that transforms 56,000+ raw Nashville housing transaction records into a fully structured, analysis-ready dataset using self-joins, window functions, and CTEs.
+
+---
 
 ## Project Overview
 
-This project focuses on cleaning and transforming the Nashville Housing dataset using PostgreSQL in order to prepare raw real estate transaction data for analysis.
+Raw real estate transaction data is rarely clean enough to analyse directly. This project demonstrates a full SQL-based data cleaning workflow on the Nashville Housing dataset — transforming a messy source into a reliable, structured dataset ready for downstream analysis, BI dashboards, or price trend modelling.
 
-The main objective of this project is to:
-
-- Import real-world housing dataset into PostgreSQL
-- Perform data preprocessing and cleaning
-- Handle missing property address values
-- Standardize categorical variables
-- Split combined address columns
-- Remove duplicate records
-- Restructure dataset for analysis
-
-This project demonstrates an end-to-end SQL data cleaning workflow that is commonly required before performing exploratory data analysis or building BI dashboards.
+Every transformation is performed entirely in PostgreSQL. No external scripting tools required. The techniques applied here — deduplication, self-joins, window functions, NULL handling — map directly to the data engineering work that sits beneath any reliable analytics pipeline.
 
 ---
 
-## Dataset Description
+## Dataset
 
-The dataset contains housing sales transaction records from Nashville, including:
+- **Source:** Publicly available Nashville housing sales transaction records
+- **Size:** 56,000+ rows
+- **Key fields:** Parcel ID, Property Address, Owner Name/Address, Sale Date, Sale Price, Legal Reference, Acreage, Year Built, Bedroom/Bathroom counts, Property Value details
 
-- Parcel ID
-- Property Address
-- Sale Date
-- Sale Price
-- Legal Reference
-- Owner Information
-- Acreage
-- Property Value Details
-- Year Built
-- Bedroom and Bathroom Counts
-
-The raw dataset contains:
-
+**Raw data quality issues present:**
 - Missing property addresses
-- Combined address fields
-- Inconsistent categorical values
-- Duplicate records
-- Unnecessary columns
-
-which makes it suitable for demonstrating real-world SQL data cleaning techniques.
+- Combined address fields (address + city + state in a single column)
+- Inconsistent categorical values (`Y` / `N` instead of `Yes` / `No`)
+- Duplicate transaction records
+- Redundant columns
 
 ---
 
-## Project Workflow
+## Approach
 
-The following workflow outlines the key steps performed in this project:
-
-- Created structured PostgreSQL table for Nashville Housing dataset
-- Populated missing property address values using self-join
-- Split property and owner address fields into separate columns
-- Standardized categorical values in SoldAsVacant column
-- Removed duplicate transaction records using Window Functions
-- Deleted unused columns for improved schema structure
-
-```mermaid
-flowchart LR
-    A[CSV Dataset] --> B[PostgreSQL Database]
-    B --> C[SQL Data Cleaning Queries]
-    C --> D[Cleaned Housing Dataset]
-    D --> E[Ready for Analysis / Visualization]
-```
-
----
-
-## Data Cleaning Process
-
-The following cleaning steps were performed to prepare the dataset:
+The cleaning workflow was performed in five stages entirely in PostgreSQL:
 
 ### 1. Handling Missing Values
-- Identified missing property addresses
-- Populated null property address values using matching Parcel IDs
+Identified rows with null `PropertyAddress`. Populated them via a self-join on matching `ParcelID` values — if two rows share a parcel ID, the non-null address can fill the null one.
 
 ### 2. Address Standardisation
-- Split Property Address into:
-  - Property Address
-  - Property City
-- Split Owner Address into:
-  - Owner Address
-  - Owner City
-  - Owner State
+Split combined `PropertyAddress` and `OwnerAddress` fields into discrete columns using `SPLIT_PART`, `SUBSTRING`, and `POSITION`:
+- `PropertyAddress` → `Property_Address`, `Property_City`
+- `OwnerAddress` → `Owner_Address`, `Owner_City`, `Owner_State`
 
 ### 3. Data Consistency
-- Converted categorical values in `SoldAsVacant`
-  - Y → Yes
-  - N → No
+Standardised the `SoldAsVacant` column using `CASE` statements: `Y` → `Yes`, `N` → `No`.
 
 ### 4. Duplicate Removal
-- Identified duplicate records using:
-  - Parcel ID
-  - Property Address
-  - Sale Price
-  - Sale Date
-  - Legal Reference
-- Removed duplicate rows using SQL Window Functions (`ROW_NUMBER()`)
+Identified duplicate records using `ROW_NUMBER()` window functions partitioned by `ParcelID`, `PropertyAddress`, `SalePrice`, `SaleDate`, and `LegalReference`. Deleted all rows where `ROW_NUMBER > 1`.
 
 ### 5. Column Cleanup
-- Dropped unused columns:
-  - PropertyAddress
-  - OwnerAddress
+Dropped the original combined address columns (`PropertyAddress`, `OwnerAddress`) after splitting was complete.
+
+**Before vs After:**
+
+| Raw Schema | Cleaned Schema |
+|------------|----------------|
+| Combined `PropertyAddress` | Split into `Property_Address`, `Property_City` |
+| Combined `OwnerAddress` | Split into `Owner_Address`, `Owner_City`, `Owner_State` |
+| `SoldAsVacant` (Y/N) | `SoldAsVacant` (Yes/No) |
+| Missing property addresses | Populated via self-join |
+| Duplicate records | Removed via window functions |
+| Redundant columns | Dropped |
 
 <p align="center">
   <img src="images/workflow.png" alt="Project Workflow" width="400"/>
@@ -108,85 +65,37 @@ The following cleaning steps were performed to prepare the dataset:
 
 ---
 
-## Before vs After Data Cleaning Schema
+## Key Findings
 
-The table below highlights how the dataset structure was improved after applying SQL data cleaning techniques.
+- Self-joins can fill missing address data without external lookup tables — shared `ParcelID` values act as a reliable key when address fields are null
+- `ROW_NUMBER()` partitioned window functions are the most reliable SQL pattern for identifying and removing duplicates while preserving one clean record per group
+- Splitting address fields into discrete columns at the cleaning stage significantly reduces complexity in all downstream queries
+- Standardising categorical values (`Y/N` → `Yes/No`) at ingestion prevents silent errors in `GROUP BY` aggregations and filters
+- The cleaned dataset is directly usable for housing price trend analysis, geographic segmentation, and BI dashboard development
 
-| Raw Dataset Schema | Cleaned Dataset Schema |
-|--------------------|------------------------|
-| PropertyAddress | Property_Address |
-| OwnerAddress | Owner_Address |
-| Combined Address Fields | Split into Address, City, State |
-| SoldAsVacant (Y/N) | SoldAsVacant (Yes/No) |
-| Duplicate Records Present | Duplicate Records Removed |
-| Missing Property Address Values | Missing Values Populated |
-| Unstructured Address Data | Structured Address Columns |
-| Redundant Columns Present | Unused Columns Dropped |
-
-This transformation improves:
-
-- Data consistency
-- Query performance
-- Schema readability
-- Analytical usability
+**SQL concepts used:** `CREATE TABLE`, `ALTER TABLE`, `UPDATE` with `JOIN`, `COALESCE`, `SUBSTRING`, `POSITION`, `SPLIT_PART`, `TRIM`, `CASE`, CTEs, `ROW_NUMBER()`, Window Functions, `DELETE` with `USING`
 
 ---
 
-## SQL Concepts Used
+## How to Run
 
-The following SQL concepts were implemented in this project:
+Requires **PostgreSQL 12+**.
 
-- CREATE TABLE
-- ALTER TABLE
-- UPDATE with JOIN
-- COALESCE
-- SUBSTRING
-- POSITION
-- SPLIT_PART
-- TRIM
-- CASE Statements
-- Common Table Expressions (CTEs)
-- ROW_NUMBER()
-- Window Functions
-- DELETE with USING clause
-- Data Transformation
+```bash
+git clone https://github.com/SamadZaheer/Nashville-Housing-Data-Cleaning---SQL.git
+cd Nashville-Housing-Data-Cleaning---SQL
 
----
+# Import the dataset into your PostgreSQL database
+psql -U your_username -d your_database -c "\copy nashville_housing FROM 'Nashville Housing Data.csv' CSV HEADER"
 
-## Final Outcome
+# Run the cleaning script
+psql -U your_username -d your_database -f "Nashville Housing Data.sql"
+```
 
-After cleaning, the dataset:
-
-- Contains no duplicate records
-- Has standardized categorical values
-- Has structured address fields
-- Has improved data consistency
-- Is ready for analysis or dashboard development
-
-The cleaned dataset can now be used for:
-
-- Housing price trend analysis
-- Geographic real estate analysis
-- Property value comparison
-- Market segmentation studies
-
----
-
-## Future Improvements
-
-- Convert numeric text fields into appropriate data types
-- Create indexes for performance optimization
-- Build analytical views for reporting
-- Connect dataset to BI tools such as:
-  - Power BI
-  - Tableau
-- Perform exploratory data analysis
+> This is a pure SQL project — no Python environment required.
 
 ---
 
 ## Author
 
-### Samad Zaheer
-
-Master of Information Technology (Data Science)  
-Queensland University of Technology (QUT)
+**Samad Zaheer** — Master of Information Technology (Data Science), Queensland University of Technology (QUT)
